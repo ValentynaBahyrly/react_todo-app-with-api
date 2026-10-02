@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { UserWarning } from './UserWarning';
 import { USER_ID } from './api/todos';
-import { getTodos, createTodo, deleteTodo } from './api/todos';
+import { getTodos, createTodo, deleteTodo, updateTodo } from './api/todos';
 import { Todo } from './types/Todo';
 import { TodoItem } from './components/TodoItem';
 import { Footer } from './components/Footer';
@@ -23,6 +23,7 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const [processings, setProcessings] = useState<number[]>([]);
+  const [editingTodoId, setEditingTodoId] = useState<number | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -106,12 +107,15 @@ export const App: React.FC = () => {
         setTodos(currentTodos =>
           currentTodos.filter(todo => todo.id !== todoId),
         );
+        setEditingTodoId(null);
       })
       .catch(() => {
         setErrorMessage(ErrorMessage.Delete);
       })
       .finally(() => {
-        setProcessings(current => current.filter(id => id !== todoId));
+        setProcessings(current =>
+          current.filter(activeId => activeId !== todoId),
+        );
         inputRef.current?.focus();
       });
   }
@@ -121,6 +125,39 @@ export const App: React.FC = () => {
 
     completedTodos.forEach(todo => {
       handleDeleteTodo(todo.id);
+    });
+  }
+
+  function handleUpdateTodo(todoId: number, fieldsToUpdate: Partial<Todo>) {
+    setProcessings(current => [...current, todoId]);
+
+    updateTodo(todoId, fieldsToUpdate)
+      .then(updatedTodo => {
+        setTodos(currentTodos =>
+          currentTodos.map(todo => (todo.id === todoId ? updatedTodo : todo)),
+        );
+        setEditingTodoId(null);
+      })
+      .catch(() => {
+        setErrorMessage(ErrorMessage.Update);
+      })
+      .finally(() => {
+        setProcessings(current =>
+          current.filter(activeId => activeId !== todoId),
+        );
+      });
+  }
+
+  const isAllTodosCompleted =
+    todos.length > 0 && todos.every(todo => todo.completed);
+
+  function handleToggleAll() {
+    const targetStatus = !isAllTodosCompleted;
+
+    todos.forEach(todo => {
+      if (todo.completed !== targetStatus) {
+        handleUpdateTodo(todo.id, { completed: targetStatus });
+      }
     });
   }
 
@@ -134,12 +171,6 @@ export const App: React.FC = () => {
 
       <div className="todoapp__content">
         <header className="todoapp__header">
-          <button
-            type="button"
-            className="todoapp__toggle-all active"
-            data-cy="ToggleAllButton"
-          />
-
           <TodoNew
             title={newTodoTitle}
             setTitle={setNewTodoTitle}
@@ -150,6 +181,13 @@ export const App: React.FC = () => {
         </header>
         {todos.length > 0 && (
           <>
+            <button
+              type="button"
+              className={`todoapp__toggle-all ${isAllTodosCompleted ? 'active' : ''}`}
+              data-cy="ToggleAllButton"
+              onClick={handleToggleAll}
+            />
+
             <section className="todoapp__main" data-cy="TodoList">
               {/* This is a completed todo */}
 
@@ -158,10 +196,23 @@ export const App: React.FC = () => {
                   key={todo.id}
                   todo={todo}
                   isProcessed={processings.includes(todo.id)}
+                  isEditing={editingTodoId === todo.id}
                   onDelete={() => handleDeleteTodo(todo.id)}
+                  onUpdate={(fieldsToUpdate: Partial<Todo>) =>
+                    handleUpdateTodo(todo.id, fieldsToUpdate)
+                  }
+                  onEdit={(id: number | null) => setEditingTodoId(id)}
                 />
               ))}
-              {tempTodo && <TodoItem todo={tempTodo} isProcessed={true} />}
+              {tempTodo && (
+                <TodoItem
+                  todo={tempTodo}
+                  isProcessed={true}
+                  isEditing={false}
+                  onUpdate={() => {}}
+                  onEdit={() => {}}
+                />
+              )}
             </section>
 
             <Footer

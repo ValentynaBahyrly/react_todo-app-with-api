@@ -20,3 +20,11 @@ export const createTodo = ({
 export const deleteTodo = (todoId: number) => {
   return client.delete<number>(`/todos/${todoId}`);
 };
+
+export const updateTodo = (todoId: number, fieldsToUpdate: Partial<Todo>) => {
+  return client.patch<Todo>(`/todos/${todoId}`, fieldsToUpdate);
+};
+
+// /todos/todoId/
+// todoId - унікальний номер саме одного об'єкта Тодо
+// fieldsToUpdate - частина об'єкта Тодо, яка має оновитися, тому Partial
