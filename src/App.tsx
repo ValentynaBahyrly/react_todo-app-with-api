@@ -122,10 +122,38 @@ export const App: React.FC = () => {
 
   function handleClearCompleted() {
     const completedTodos = todos.filter(todo => todo.completed);
+    const completedIds = completedTodos.map(todo => todo.id);
 
-    completedTodos.forEach(todo => {
-      handleDeleteTodo(todo.id);
-    });
+    setProcessings(current => [...current, ...completedIds]);
+
+    const deletePromises = completedTodos.map(todo =>
+      deleteTodo(todo.id)
+        .then(() => todo.id)
+        .catch(() => {
+          setErrorMessage(ErrorMessage.Delete);
+
+          return null;
+        }),
+    );
+
+    Promise.all(deletePromises)
+      .then(resolvedIds => {
+        const successfullyDeletedIds = resolvedIds.filter(
+          (id): id is number => id !== null,
+        );
+
+        setTodos(currentTodos =>
+          currentTodos.filter(
+            todo => !successfullyDeletedIds.includes(todo.id),
+          ),
+        );
+      })
+      .finally(() => {
+        setProcessings(current =>
+          current.filter(id => !completedIds.includes(id)),
+        );
+        inputRef.current?.focus();
+      });
   }
 
   function handleUpdateTodo(todoId: number, fieldsToUpdate: Partial<Todo>) {
@@ -153,12 +181,38 @@ export const App: React.FC = () => {
 
   function handleToggleAll() {
     const targetStatus = !isAllTodosCompleted;
+    const todosToUpdate = todos.filter(todo => todo.completed !== targetStatus);
 
-    todos.forEach(todo => {
-      if (todo.completed !== targetStatus) {
-        handleUpdateTodo(todo.id, { completed: targetStatus });
-      }
-    });
+    if (todosToUpdate.length === 0) {
+      return;
+    }
+
+    const idsToUpdate = todosToUpdate.map(todo => todo.id);
+
+    setProcessings(current => [...current, ...idsToUpdate]);
+
+    const updatePromises = todosToUpdate.map(todo =>
+      updateTodo(todo.id, { completed: targetStatus }),
+    );
+
+    Promise.all(updatePromises)
+      .then(() => {
+        setTodos(currentTodos =>
+          currentTodos.map(todo =>
+            idsToUpdate.includes(todo.id)
+              ? { ...todo, completed: targetStatus }
+              : todo,
+          ),
+        );
+      })
+      .catch(() => {
+        setErrorMessage(ErrorMessage.Update);
+      })
+      .finally(() => {
+        setProcessings(current =>
+          current.filter(id => !idsToUpdate.includes(id)),
+        );
+      });
   }
 
   if (!USER_ID) {
@@ -171,6 +225,15 @@ export const App: React.FC = () => {
 
       <div className="todoapp__content">
         <header className="todoapp__header">
+          {todos.length > 0 && (
+            <button
+              type="button"
+              className={`todoapp__toggle-all ${isAllTodosCompleted ? 'active' : ''}`}
+              data-cy="ToggleAllButton"
+              onClick={handleToggleAll}
+            />
+          )}
+
           <TodoNew
             title={newTodoTitle}
             setTitle={setNewTodoTitle}
@@ -181,13 +244,6 @@ export const App: React.FC = () => {
         </header>
         {todos.length > 0 && (
           <>
-            <button
-              type="button"
-              className={`todoapp__toggle-all ${isAllTodosCompleted ? 'active' : ''}`}
-              data-cy="ToggleAllButton"
-              onClick={handleToggleAll}
-            />
-
             <section className="todoapp__main" data-cy="TodoList">
               {/* This is a completed todo */}
 
